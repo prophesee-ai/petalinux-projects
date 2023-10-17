@@ -1,0 +1,96 @@
+From 5a91b5b24ccf92035072fb79fcc8c6e8416a5f72 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Tue, 17 Oct 2023 18:21:59 +0200
+Subject: [PATCH] dma: don't use IRQThreshold on Xilinx AXIDMA
+
+Prophesee uses this DMA for live video data streaming, with limited
+buffering capability in the hardware video pipeline, thus it is better
+to trigger an interrupt as soon as a descriptor is ready, rather than
+group the management of all the buffers, introducing latency and need
+to manage the first buffer faster than the pipeline buffering gets
+filled (which should be just long enough to cover the SG operation)
+
+Signed-off-by: Christian Dreher <cdreher@prophesee.ai>
+---
+ drivers/dma/xilinx/xilinx_dma.c | 44 +++++++++++++++++++++++++--------
+ 1 file changed, 34 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/dma/xilinx/xilinx_dma.c b/drivers/dma/xilinx/xilinx_dma.c
+index 3ff9fa3d8cd5..c42e9d633b72 100644
+--- a/drivers/dma/xilinx/xilinx_dma.c
++++ b/drivers/dma/xilinx/xilinx_dma.c
+@@ -938,6 +938,37 @@ static void xilinx_dma_free_chan_resources(struct dma_chan *dchan)
+ 
+ }
+ 
++/**
++ * xilinx_dma_is_complete - Check if a transfer descriptor is completed
++ * @chan: Driver specific dma channel
++ * @desc: dma transaction descriptor
++ *
++ * Return: true if the descriptor describes a completed transfer
++ */
++static bool xilinx_dma_is_complete(struct xilinx_dma_chan *chan,
++				  struct xilinx_dma_tx_descriptor *desc)
++{
++	struct xilinx_axidma_tx_segment *axidma_seg;
++	struct xilinx_axidma_desc_hw *axidma_hw;
++	struct list_head *entry;
++	bool done = true;
++
++	/* dma_complete is called when active list is done on other implementations */
++	if (chan->xdev->dma_config->dmatype != XDMA_TYPE_AXIDMA)
++		return true;
++
++	list_for_each(entry, &desc->segments) {
++		axidma_seg = list_entry(entry,
++					struct xilinx_axidma_tx_segment,
++					node);
++		axidma_hw = &axidma_seg->hw;
++		if(!(axidma_hw->status & BIT(31))) /* Cmplt */
++			done = false;
++	}
++
++	return done;
++}
++
+ /**
+  * xilinx_dma_get_residue - Compute residue for a given descriptor
+  * @chan: Driver specific dma channel
+@@ -1507,7 +1538,6 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ {
+ 	struct xilinx_dma_tx_descriptor *head_desc, *tail_desc;
+ 	struct xilinx_axidma_tx_segment *tail_segment;
+-	u32 reg;
+ 
+ 	if (chan->err)
+ 		return;
+@@ -1525,15 +1555,6 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ 	tail_segment = list_last_entry(&tail_desc->segments,
+ 				       struct xilinx_axidma_tx_segment, node);
+ 
+-	reg = dma_ctrl_read(chan, XILINX_DMA_REG_DMACR);
+-
+-	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX) {
+-		reg &= ~XILINX_DMA_CR_COALESCE_MAX;
+-		reg |= chan->desc_pendingcount <<
+-				  XILINX_DMA_CR_COALESCE_SHIFT;
+-		dma_ctrl_write(chan, XILINX_DMA_REG_DMACR, reg);
+-	}
+-
+ 	if (chan->has_sg)
+ 		xilinx_write(chan, XILINX_DMA_REG_CURDESC,
+ 			     head_desc->async_tx.phys);
+@@ -1683,6 +1704,9 @@ static void xilinx_dma_complete_descriptor(struct xilinx_dma_chan *chan)
+ 		return;
+ 
+ 	list_for_each_entry_safe(desc, next, &chan->active_list, node) {
++		if (!xilinx_dma_is_complete(chan, desc))
++			break;
++
+ 		if (chan->has_sg && chan->xdev->dma_config->dmatype !=
+ 		    XDMA_TYPE_VDMA)
+ 			desc->residue = xilinx_dma_get_residue(chan, desc);
+-- 
+2.39.2
+
