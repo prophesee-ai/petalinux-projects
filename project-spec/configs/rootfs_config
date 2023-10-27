@@ -4117,6 +4117,11 @@ CONFIG_Init-manager-systemd=y
 # CONFIG_Init-manager-sysvinit is not set
 
 #
+# apps 
+#
+CONFIG_prophesee-kv260-imx636=y
+
+#
 # modules 
 #
 CONFIG_prophesee-sensor-drivers=y

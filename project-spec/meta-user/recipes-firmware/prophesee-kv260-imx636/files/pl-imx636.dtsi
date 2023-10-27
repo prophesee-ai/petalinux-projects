@@ -1,0 +1,172 @@
+/* This device tree source file will be appended to the dtg-generated device tree file */ 
+
+#define GPIO_ACTIVE_HIGH 0
+#define GPIO_ACTIVE_LOW 1
+
+/ {
+	fragment@3 {
+		target = <&amba>;
+		overlay3: __overlay__ {
+			#address-cells = <2>;
+			#size-cells = <2>;
+
+			ccam5_3v3: ccam5-3v3 {
+				compatible = "regulator-fixed";
+				regulator-name = "3v3";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				gpio = <&axi_gpio_0 0 GPIO_ACTIVE_HIGH>;
+				startup-delay-us = <500000>;
+				enable-active-high;
+			};
+
+			ccam5_3v0: ccam5-3v0 {
+				compatible = "regulator-fixed";
+				regulator-name = "vadd";
+				regulator-min-microvolt = <3000000>;
+				regulator-max-microvolt = <3000000>;
+				vin-supply = <&ccam5_3v3>;
+			};
+
+			ccam5_2v5: ccam5-2v5 {
+				compatible = "regulator-fixed";
+				regulator-name = "2v5";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <2500000>;
+				vin-supply = <&ccam5_3v3>;
+			};
+
+			ccam5_1v8: ccam5-1v8 {
+				compatible = "regulator-fixed";
+				regulator-name = "vddd1";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				vin-supply = <&ccam5_3v3>;
+			};
+
+			ccam5_1v1: ccam5-1v1 {
+				compatible = "regulator-fixed";
+				regulator-name = "vddd2";
+				regulator-min-microvolt = <1100000>;
+				regulator-max-microvolt = <1100000>;
+				vin-supply = <&ccam5_3v3>;
+			};
+
+			imx636_clk: ccam5_clk_U9 {
+				compatible = "fixed-clock";
+				#clock-cells = <0>;
+				clock-frequency = <20000000>;
+				clock-accuracy = <25>;
+			};
+		};
+	};
+};
+
+&ps_host_if_0 {
+	compatible = "psee,axi4s-packetizer";
+	dmas = <&axi_dma 1>;
+	dma-names = "port0";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			/* Sink port */
+			reg = <0>;
+			packetizer_in: endpoint {
+				remote-endpoint = <&smart_tracker_out>;
+			};
+		};
+	};
+};
+
+&event_stream_smart_t_0 {
+	compatible = "psee,event-stream-smart-tracker", "psee,passthrough";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			/* Sink port */
+			reg = <0>;
+			direction = "input";
+			smart_tracker_in: endpoint {
+				remote-endpoint = <&mipi_csirx_outmipi_csi2_rx_subsyst_0>;
+			};
+		};
+		port@1 {
+			/* Source port */
+			reg = <1>;
+			smart_tracker_out: endpoint {
+				remote-endpoint = <&packetizer_in>;
+			};
+		};
+	};
+};
+
+&axis_tkeep_handler_0 {
+	compatible = "psee,axis-tkeep-handler", "psee,passthrough";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			/* Sink port */
+			reg = <0>;
+			axis_tkeep_handler_0mipi_csi2_rx_subsyst_0: endpoint {
+				remote-endpoint = <&mipi_csirx_outmipi_csi2_rx_subsyst_0>;
+			};
+		};
+		port@1 {
+			/* Source port */
+			reg = <1>;
+			tkeep_handler_out: endpoint {
+				remote-endpoint = <&smart_tracker_in>;
+			};
+		};
+	};
+};
+
+&axi_iic_0 {
+	i2c-mux@74 {
+		compatible = "nxp,pca9546";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x74>;
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+		};
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			sensor@3c {
+				compatible = "sony,imx636";
+				reg = <0x3c>;
+
+				clocks = <&imx636_clk>;
+
+				vadd-supply = <&ccam5_3v0>;
+				vddd1-supply = <&ccam5_1v8>;
+				vddd2-supply = <&ccam5_1v1>;
+
+				nreset-gpio = <&axi_gpio_0 1 GPIO_ACTIVE_HIGH>;
+
+				port {
+					imx636: endpoint {
+						remote-endpoint = <&mipi_csi_inmipi_csi2_rx_subsyst_0>;
+						data-lanes = <1 2>;
+						link-frequencies = /bits/ 64 <600000000>;
+					};
+				};
+
+			};
+		};
+	};
+};
+
+&mipi_csi_inmipi_csi2_rx_subsyst_0 {
+	remote-endpoint = <&imx636>;
+};
