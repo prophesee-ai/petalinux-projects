@@ -1,0 +1,18 @@
+From 138c4cb7d8466021fd1c7281107c7a5212abb0c3 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Thu, 2 Nov 2023 17:43:43 +0100
+Subject: Disable packet timeout
+
+
+diff --git a/imx636.c b/imx636.c
+index ae507ef..2763826 100644
+--- a/imx636.c
++++ b/imx636.c
+@@ -744,6 +744,7 @@ static int imx636_tune_analog(struct imx636 *imx636)
+ static int imx636_start_streaming(struct imx636 *imx636)
+ {
+ 	/* MIPI CSI-2 enable */
++	RET_ON(imx636_clear_reg(imx636, IMX636_MIPI_CONTROL, BIT(5)));
+ 	RET_ON(imx636_set_reg(imx636, IMX636_MIPI_CONTROL, IMX636_MIPI_CSI_ENABLE));
+ 	/* Pixel reset release */
+ 	RET_ON(imx636_set_reg(imx636, IMX636_ROI_CTRL, IMX636_ROI_PX_TD_RSTN));

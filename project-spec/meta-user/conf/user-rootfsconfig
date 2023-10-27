@@ -4,3 +4,4 @@
 CONFIG_gpio-demo
 CONFIG_peekpoke
 CONFIG_packagegroup-petalinux-som
+CONFIG_prophesee-sensor-drivers
