@@ -4,7 +4,7 @@ build/
 images/linux/
 pre-built/linux/
 .petalinux/*
-!.petalinux/metadata
+!.petalinux/dummy
 *.o
 *.jou
 *.log
