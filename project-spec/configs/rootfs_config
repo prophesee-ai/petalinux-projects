@@ -2713,7 +2713,7 @@ CONFIG_packagegroup-core-ssh-dropbear=y
 #
 # perf 
 #
-# CONFIG_perf is not set
+CONFIG_perf=y
 # CONFIG_perf-python is not set
 # CONFIG_perf-dbg is not set
 # CONFIG_perf-dev is not set
