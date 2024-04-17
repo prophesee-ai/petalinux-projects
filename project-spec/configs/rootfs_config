@@ -4120,6 +4120,7 @@ CONFIG_Init-manager-systemd=y
 # modules 
 #
 CONFIG_prophesee-sensor-drivers=y
+CONFIG_psee-video=y
 
 #
 # user packages 
