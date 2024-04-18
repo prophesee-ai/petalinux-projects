@@ -1,0 +1,242 @@
+From ba97849180619353415aae829a96302588c57e13 Mon Sep 17 00:00:00 2001
+From: Olivier Georget <ogeorget@prophesee.ai>
+Date: Wed, 31 Jan 2024 18:25:52 +0100
+Subject: [PATCH 12/13] [MV-1764] Split-up Allocator interface to ease re-usage
+ of the std::vector<Data>::allocator
+
+---
+ .../metavision/hal/utils/buffer_allocator.h   | 50 ++++++++++++-------
+ hal/cpp/test/dummy_datatransfer.h             |  2 +-
+ .../include/boards/v4l2/v4l2_data_transfer.h  | 12 ++---
+ .../src/boards/v4l2/v4l2_dmabuf_allocator.cpp | 14 +++---
+ .../src/boards/v4l2/v4l2_mmap_allocator.cpp   |  8 +--
+ 5 files changed, 50 insertions(+), 36 deletions(-)
+
+diff --git a/hal/cpp/include/metavision/hal/utils/buffer_allocator.h b/hal/cpp/include/metavision/hal/utils/buffer_allocator.h
+index 9e495c1a40..52e63f1d7e 100644
+--- a/hal/cpp/include/metavision/hal/utils/buffer_allocator.h
++++ b/hal/cpp/include/metavision/hal/utils/buffer_allocator.h
+@@ -16,29 +16,38 @@
+ #include <stdlib.h>
+ #include <limits.h>
+ #include <system_error>
++#include <vector>
+ 
+ namespace Metavision {
+ 
+ namespace BufferAllocatorInternal {
+ /// @brief a class that manages BufferAllocator<T> allocations, in a type-agnostic way to allow rebinding
+ ///
++template<typename T>
+ class Allocator {
+ public:
+-    virtual void *allocate(size_t n, size_t data_size) {
+-        void *p = calloc(n, data_size);
+-        if (!p)
+-            throw std::system_error(errno, std::generic_category());
+-        return p;
++    virtual T *allocate(size_t n)            = 0;
++    virtual void deallocate(T *p, size_t n)  = 0;
++    virtual size_t max_size() const noexcept = 0;
++    virtual ~Allocator() {}
++};
++
++template<typename T>
++class VectorAllocator : public Allocator<T> {
++    using AllocatorType = typename std::vector<T>::allocator_type;
++    AllocatorType allocator;
++
++public:
++    virtual T *allocate(size_t n) override {
++        return allocator.allocate(n);
+     }
+-    virtual void deallocate(void *p, size_t n, size_t data_size) {
+-        free(p);
++    virtual void deallocate(T *p, size_t n) override {
++        return allocator.deallocate(p, n);
+     }
+-    virtual size_t max_size(size_t data_size) const noexcept {
+-        return SIZE_MAX / data_size;
++    virtual size_t max_size() const noexcept override {
++        return allocator.max_size();
+     }
+-    // Since we will delete it through smart_ptr<Buffer>, we must be sure to call the actual destructor
+-    // implementation
+-    virtual ~Allocator() {}
++    virtual ~VectorAllocator() {}
+ };
+ } // namespace BufferAllocatorInternal
+ 
+@@ -75,7 +84,7 @@ public:
+ 
+ public:
+     // Default constuctor, default construction is fine
+-    BufferAllocator() : impl_(std::make_shared<Impl>()) {}
++    BufferAllocator() : impl_(std::make_shared<DefaultAllocator>()) {}
+     // Copy constuctor, called when a vector is built with an Allocator
+     BufferAllocator(const BufferAllocator &orig) : impl_(orig.impl_) {}
+     // Move constructor, move the internal state
+@@ -86,19 +95,22 @@ public:
+         using other = BufferAllocator<U>;
+     };
+     template<typename U>
+-    BufferAllocator(const BufferAllocator<U> &orig) : BufferAllocator(orig.get_impl()) {}
++    BufferAllocator(const BufferAllocator<U> &orig) :
++        BufferAllocator(
++            // Could use std::reinterpret_pointer_cast here, but it's not available on Android NDK 21
++            ImplPtr{orig.get_impl(), reinterpret_cast<typename ImplPtr::element_type *>(orig.get_impl().get())}) {}
+ 
+ public:
+     pointer allocate(size_type n) {
+-        return reinterpret_cast<pointer>(impl_->allocate(n, sizeof(Data)));
++        return reinterpret_cast<pointer>(impl_->allocate(n));
+     }
+ 
+     void deallocate(pointer p, size_type n) {
+-        impl_->deallocate(reinterpret_cast<void *>(p), n, sizeof(Data));
++        impl_->deallocate(p, n);
+     }
+ 
+     size_type max_size() const noexcept {
+-        return impl_->max_size(sizeof(Data));
++        return impl_->max_size();
+     }
+ 
+     template<class U, class... Args>
+@@ -111,7 +123,9 @@ public:
+     }
+ 
+ public:
+-    using Impl = BufferAllocatorInternal::Allocator;
++    using Impl             = BufferAllocatorInternal::Allocator<Data>;
++    using DefaultAllocator = BufferAllocatorInternal::VectorAllocator<Data>;
++
+     // The goal of this design is to manage Buffer Allocation from reserved memory (e.g. contiguous memory).
+     // The implementation could be a unique_ptr to a state containing a reference or a shared pointer to the
+     // memory pool, plus information regarding the current allocation
+diff --git a/hal/cpp/test/dummy_datatransfer.h b/hal/cpp/test/dummy_datatransfer.h
+index c863d1190c..7a7b9ad106 100644
+--- a/hal/cpp/test/dummy_datatransfer.h
++++ b/hal/cpp/test/dummy_datatransfer.h
+@@ -18,7 +18,7 @@
+ 
+ struct DummyDataTransfer : public Metavision::DataTransfer {
+     using Allocator = Metavision::DataTransfer::Allocator;
+-    class DummyAllocator : public Allocator::Impl {};
++    class DummyAllocator : public Allocator::DefaultAllocator {};
+ 
+     DummyDataTransfer() :
+         Metavision::DataTransfer(1, BufferPool::make_bounded(4, Allocator(Allocator::ImplPtr(new DummyAllocator())))) {}
+diff --git a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+index c7f2f4f520..a5fbcb1675 100644
+--- a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
++++ b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+@@ -53,8 +53,8 @@ private:
+         }
+ 
+     public:
+-        size_t max_size(size_t data_size) const noexcept override {
+-            return buffer_size_ / data_size;
++        size_t max_size() const noexcept override {
++            return buffer_size_ / sizeof(Data);
+         }
+         // Get a descriptor usable with V4L2 API from a data pointer
+         virtual void fill_v4l2_buffer(void *, V4l2Buffer &) const = 0;
+@@ -63,8 +63,8 @@ private:
+     };
+ 
+     class V4l2MmapAllocator : public V4l2Allocator {
+-        void *allocate(size_t n, size_t data_size) override;
+-        void deallocate(void *p, size_t n, size_t data_size) override;
++        Data *allocate(size_t n) override;
++        void deallocate(Data *p, size_t n) override;
+         void fill_v4l2_buffer(void *, V4l2Buffer &) const override;
+ 
+     public:
+@@ -80,8 +80,8 @@ private:
+     };
+ 
+     class DmabufAllocator : public V4l2Allocator {
+-        void *allocate(size_t n, size_t data_size) override;
+-        void deallocate(void *p, size_t n, size_t data_size) override;
++        Data *allocate(size_t n) override;
++        void deallocate(Data *p, size_t n) override;
+         void fill_v4l2_buffer(void *, V4l2Buffer &) const override;
+         void begin_cpu_access(void *) const override;
+         void end_cpu_access(void *) const override;
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+index bce11c3336..cf07875978 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+@@ -30,29 +30,29 @@ V4l2DataTransfer::DmabufAllocator::DmabufAllocator(int fd, std::unique_ptr<DmaBu
+ 
+ V4l2DataTransfer::DmabufAllocator::~DmabufAllocator() {}
+ 
+-void *V4l2DataTransfer::DmabufAllocator::allocate(size_t n, size_t data_size) {
++V4l2DataTransfer::Data *V4l2DataTransfer::DmabufAllocator::allocate(size_t n) {
+     void *vaddr;
+ 
+-    if (n > max_size(data_size))
++    if (n > max_size())
+         throw std::length_error("Trying to allocate more than the V4L2 buffer length");
+ 
+     // Alloc a new buffer in the DMA buffer heap
+-    auto dmabuf_fd = dmabuf_heap_->alloc(n * data_size);
++    auto dmabuf_fd = dmabuf_heap_->alloc(n * sizeof(Data));
+ 
+     // Map it in the program memory
+-    vaddr = mmap(NULL, n * data_size, PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd, 0);
++    vaddr = mmap(NULL, n * sizeof(Data), PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd, 0);
+     if (vaddr == MAP_FAILED)
+         throw std::system_error(errno, std::generic_category(), "Could not mmap DMABUF buffer");
+ 
+     // Save the mapping
+     mapping_[vaddr] = dmabuf_fd;
+ 
+-    return vaddr;
++    return V4l2DataTransfer::Allocator::pointer(vaddr);
+ }
+ 
+-void V4l2DataTransfer::DmabufAllocator::deallocate(void *p, size_t n, size_t data_size) {
++void V4l2DataTransfer::DmabufAllocator::deallocate(Data *p, size_t n) {
+     // remove buffer mapping in userspace
+-    munmap((void *)p, n * data_size);
++    munmap((void *)p, n * sizeof(Data));
+     // free it in the DmaHeap
+     dmabuf_heap_->free(mapping_[p]);
+     // Drop the map entry
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_mmap_allocator.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_mmap_allocator.cpp
+index 617c62dbd7..0473df0b9a 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_mmap_allocator.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_mmap_allocator.cpp
+@@ -31,12 +31,12 @@ V4l2DataTransfer::V4l2MmapAllocator::~V4l2MmapAllocator() {
+     close(fd_);
+ }
+ 
+-void *V4l2DataTransfer::V4l2MmapAllocator::allocate(size_t n, size_t datasize) {
++V4l2DataTransfer::Data *V4l2DataTransfer::V4l2MmapAllocator::allocate(size_t n) {
+     void *vaddr;
+     V4l2Buffer buffer;
+     int buffer_index;
+ 
+-    if (n > max_size(datasize))
++    if (n > max_size())
+         throw std::length_error("Trying to expand allocation beyond V4L2 buffer length");
+ 
+     // Look for a free buffer
+@@ -63,10 +63,10 @@ void *V4l2DataTransfer::V4l2MmapAllocator::allocate(size_t n, size_t datasize) {
+     // Save the mapping, implicitely making the buffer used.
+     mapping_[buffer_index] = vaddr;
+ 
+-    return mapping_[buffer_index];
++    return DataTransfer::Allocator::pointer(vaddr);
+ }
+ 
+-void V4l2DataTransfer::V4l2MmapAllocator::deallocate(void *p, size_t n, size_t data_size) {
++void V4l2DataTransfer::V4l2MmapAllocator::deallocate(Data *p, size_t n) {
+     // Mark the buffer as unused
+     for (int i = 0; i < device_buffer_number; i++)
+         if (mapping_[i] == p)
+-- 
+2.39.2
+

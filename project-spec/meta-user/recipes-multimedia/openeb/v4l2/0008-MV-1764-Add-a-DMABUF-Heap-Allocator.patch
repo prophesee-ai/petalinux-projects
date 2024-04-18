@@ -1,0 +1,183 @@
+From 9dfb511573c4f79db764c49bf67c913590761e87 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Thu, 18 Jan 2024 15:10:39 +0100
+Subject: [PATCH 08/13] [MV-1764] Add a DMABUF Heap Allocator
+
+---
+ .../include/boards/v4l2/v4l2_data_transfer.h  | 22 ++++++
+ .../src/boards/v4l2/CMakeLists.txt            |  1 +
+ .../src/boards/v4l2/v4l2_data_transfer.cpp    | 16 +++++
+ .../src/boards/v4l2/v4l2_dmabuf_allocator.cpp | 67 +++++++++++++++++++
+ 4 files changed, 106 insertions(+)
+ create mode 100644 hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+
+diff --git a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+index 71c4726057..43bb6a841f 100644
+--- a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
++++ b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+@@ -13,14 +13,20 @@
+ #define METAVISION_HAL_PSEE_PLUGINS_V4L2_DATA_TRANSFER_H
+ 
+ #include "metavision/hal/utils/data_transfer.h"
++#include <map>
+ 
+ namespace Metavision {
+ using V4l2Buffer         = struct v4l2_buffer;
+ using V4l2RequestBuffers = struct v4l2_requestbuffers;
+ 
++class DmaBufHeap;
++
+ class V4l2DataTransfer : public DataTransfer {
+ public:
++    // Constructor using MMAP buffers
+     V4l2DataTransfer(int fd, uint32_t raw_event_size_bytes);
++    // Constructor using DMABUF buffers
++    V4l2DataTransfer(int fd, uint32_t raw_event_size_bytes, const std::string &heap_path, const std::string &heap_name);
+     ~V4l2DataTransfer();
+ 
+ private:
+@@ -70,6 +76,22 @@ private:
+         size_t buffer_size_;
+         const int fd_;
+     };
++
++    class DmabufAllocator : public V4l2Allocator {
++        void *allocate(size_t n, size_t data_size) override;
++        void deallocate(void *p, size_t n, size_t data_size) override;
++        void fill_v4l2_buffer(void *, V4l2Buffer &) const override;
++
++    public:
++        DmabufAllocator(int fd, std::unique_ptr<DmaBufHeap> &&);
++        ~DmabufAllocator() override;
++
++    private:
++        // The mapping between buffer fds and their memory mapping
++        std::map<void *, int> mapping_;
++        // Dmabuf heap where the memory is allocated
++        std::unique_ptr<DmaBufHeap> dmabuf_heap_;
++    };
+     void fill_v4l2_buffer(BufferPtr &, V4l2Buffer &) const;
+ };
+ 
+diff --git a/hal_psee_plugins/src/boards/v4l2/CMakeLists.txt b/hal_psee_plugins/src/boards/v4l2/CMakeLists.txt
+index 2c32c82445..7a8a22dc82 100644
+--- a/hal_psee_plugins/src/boards/v4l2/CMakeLists.txt
++++ b/hal_psee_plugins/src/boards/v4l2/CMakeLists.txt
+@@ -21,6 +21,7 @@ target_sources(metavision_psee_hw_layer_obj PRIVATE
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_camera_discovery.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_data_transfer.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_mmap_allocator.cpp
++    ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_dmabuf_allocator.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_device.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_board_command.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/v4l2_hardware_identification.cpp
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
+index ff816d27e0..db678cd1b0 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
+@@ -18,6 +18,7 @@
+ #include <linux/videodev2.h>
+ 
+ #include "boards/v4l2/v4l2_data_transfer.h"
++#include "boards/v4l2/dma_buf_heap.h"
+ 
+ #include "metavision/hal/utils/hal_log.h"
+ 
+@@ -41,6 +42,21 @@ V4l2DataTransfer::V4l2DataTransfer(int fd, uint32_t raw_event_size_bytes) :
+         throw std::system_error(ENOMEM, std::generic_category(), "Unexepected amount of V4L2 buffers allocated");
+ }
+ 
++V4l2DataTransfer::V4l2DataTransfer(int fd, uint32_t raw_event_size_bytes, const std::string &heap_path,
++                                   const std::string &heap_name) :
++    DataTransfer(raw_event_size_bytes,
++                 // To create device_buffer_number std::vectors from a heap, using DMABUF
++                 DataTransfer::BufferPool::make_bounded(device_buffer_number,
++                                                        Allocator(Allocator::ImplPtr(new DmabufAllocator(
++                                                            fd, std::make_unique<DmaBufHeap>(heap_path, heap_name))))),
++                 allow_buffer_drop),
++    memtype_(V4L2_MEMORY_DMABUF),
++    fd_(dup(fd)) {
++    auto res = request_buffers(device_buffer_number);
++    if (res.count != device_buffer_number)
++        throw std::system_error(ENOMEM, std::generic_category(), "Unexepected amount of V4L2 buffers allocated");
++}
++
+ V4l2DataTransfer::~V4l2DataTransfer() {
+     // Release the previously acquired buffers
+     request_buffers(0);
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+new file mode 100644
+index 0000000000..c0189aa9e3
+--- /dev/null
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+@@ -0,0 +1,67 @@
++/**********************************************************************************************************************
++ * Copyright (c) Prophesee S.A.                                                                                       *
++ *                                                                                                                    *
++ * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
++ * you may not use this file except in compliance with the License.                                                   *
++ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0                                 *
++ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed   *
++ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                      *
++ * See the License for the specific language governing permissions and limitations under the License.                 *
++ **********************************************************************************************************************/
++
++#include <system_error>
++
++#include <unistd.h>
++#include <poll.h>
++#include <sys/ioctl.h>
++#include <sys/mman.h>
++#include <linux/videodev2.h>
++
++#include "boards/v4l2/v4l2_data_transfer.h"
++#include "boards/v4l2/dma_buf_heap.h"
++
++#include "metavision/hal/utils/hal_log.h"
++
++using namespace Metavision;
++using Allocator = DataTransfer::Allocator;
++
++V4l2DataTransfer::DmabufAllocator::DmabufAllocator(int fd, std::unique_ptr<DmaBufHeap> &&heap) :
++    V4l2Allocator(fd), dmabuf_heap_(std::move(heap)) {}
++
++V4l2DataTransfer::DmabufAllocator::~DmabufAllocator() {}
++
++void *V4l2DataTransfer::DmabufAllocator::allocate(size_t n, size_t data_size) {
++    void *vaddr;
++
++    if (n > max_size(data_size))
++        throw std::length_error("Trying to allocate more than the V4L2 buffer length");
++
++    // Alloc a new buffer in the DMA buffer heap
++    auto dmabuf_fd = dmabuf_heap_->alloc(n * data_size);
++
++    // Map it in the program memory
++    vaddr = mmap(NULL, n * data_size, PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd, 0);
++    if (vaddr == MAP_FAILED)
++        throw std::system_error(errno, std::generic_category(), "Could not mmap DMABUF buffer");
++
++    // Save the mapping
++    mapping_[vaddr] = dmabuf_fd;
++
++    return vaddr;
++}
++
++void V4l2DataTransfer::DmabufAllocator::deallocate(void *p, size_t n, size_t data_size) {
++    // remove buffer mapping in userspace
++    munmap((void *)p, n * data_size);
++    // free it in the DmaHeap
++    dmabuf_heap_->free(mapping_[p]);
++    // Drop the map entry
++    mapping_.erase(p);
++}
++
++void V4l2DataTransfer::DmabufAllocator::fill_v4l2_buffer(void *vaddr, V4l2Buffer &buf) const {
++    auto it = mapping_.find(vaddr);
++    if (it == mapping_.end())
++        throw std::system_error(EINVAL, std::generic_category(), "Requested fd of a non-Dmabuf buffer");
++    buf.m.fd = it->second;
++}
+-- 
+2.39.2
+

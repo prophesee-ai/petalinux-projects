@@ -7,3 +7,4 @@ CONFIG_packagegroup-petalinux-som
 CONFIG_prophesee-sensor-drivers
 CONFIG_psee-video
 CONFIG_prophesee-kv260-imx636
+CONFIG_metavision

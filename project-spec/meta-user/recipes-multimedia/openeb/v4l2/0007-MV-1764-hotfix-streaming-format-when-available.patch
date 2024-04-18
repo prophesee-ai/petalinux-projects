@@ -1,0 +1,104 @@
+From 1e782b0b76952d6f72f40737969be29bc520c270 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Fri, 10 Nov 2023 15:32:29 +0100
+Subject: [PATCH 07/13] [MV-1764] hotfix streaming format when available
+
+Also, rely on the existing config, to be set before running Metavision
+---
+ .../src/boards/v4l2/v4l2_device.cpp           | 11 +---
+ .../src/devices/v4l2/v4l2_device_builder.cpp  | 50 ++++++++++++++++++-
+ 2 files changed, 50 insertions(+), 11 deletions(-)
+
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_device.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_device.cpp
+index 4013574fc0..ad3abe72cf 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_device.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_device.cpp
+@@ -54,16 +54,7 @@ V4L2DeviceControl::V4L2DeviceControl(const std::string &dev_name) {
+     if (!(cap_.capabilities & V4L2_CAP_STREAMING))
+         throw std::runtime_error(dev_name + " does not support streaming i/o");
+ 
+-    struct v4l2_format fmt;
+-    std::memset(&fmt, 0, sizeof(fmt));
+-    fmt.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+-    fmt.fmt.pix.field       = V4L2_FIELD_ANY;
+-    fmt.fmt.pix.width       = 65536;
+-    fmt.fmt.pix.height      = 64;
+-
+-    if (ioctl(fd_, VIDIOC_S_FMT, &fmt))
+-        raise_error("VIDIOC_S_FMT failed");
++    // Note: this code expects the V4L2 device to be configured to output a supported format
+ }
+ 
+ V4l2Capability V4L2DeviceControl::get_capability() const {
+diff --git a/hal_psee_plugins/src/devices/v4l2/v4l2_device_builder.cpp b/hal_psee_plugins/src/devices/v4l2/v4l2_device_builder.cpp
+index fd6e3d5096..b127fb4898 100644
+--- a/hal_psee_plugins/src/devices/v4l2/v4l2_device_builder.cpp
++++ b/hal_psee_plugins/src/devices/v4l2/v4l2_device_builder.cpp
+@@ -51,6 +51,9 @@
+ #include "utils/make_decoder.h"
+ #include "devices/common/sensor_descriptor.h"
+ 
++#include <sys/ioctl.h>
++#include <linux/videodev2.h>
++
+ namespace Metavision {
+ 
+ static bool match(std::shared_ptr<BoardCommand> cmd, std::vector<MatchPattern> match_list) {
+@@ -175,7 +178,52 @@ bool V4L2DeviceBuilder::build_device(std::shared_ptr<BoardCommand> cmd, DeviceBu
+ 
+     auto v4l2cmd = std::dynamic_pointer_cast<V4L2BoardCommand>(cmd);
+ 
+-    auto ctrl          = v4l2cmd->get_device_control();
++    auto ctrl = v4l2cmd->get_device_control();
++    {
++        // This plugin code does not set format yet, it shall be set before starting Metavision, but several values
++        // are possible. Update sensor information accordingly.
++        struct v4l2_format fmt {
++            .type = V4L2_BUF_TYPE_VIDEO_CAPTURE
++        };
++
++        if (ioctl(ctrl->get_fd(), VIDIOC_G_FMT, &fmt))
++            raise_error("VIDIOC_G_FMT failed");
++
++        switch (fmt.fmt.pix.pixelformat) {
++        case v4l2_fourcc('P', 'S', 'E', 'E'): {
++            StreamFormat format("EVT2");
++            format["width"]                    = std::to_string(fmt.fmt.pix.width);
++            format["height"]                   = std::to_string(fmt.fmt.pix.height);
++            sensor_descriptor->encoding_format = format.to_string();
++            break;
++        }
++        case v4l2_fourcc('P', 'S', 'E', '1'): {
++            StreamFormat format("EVT21");
++            format["endianness"]               = "legacy";
++            format["width"]                    = std::to_string(fmt.fmt.pix.width);
++            format["height"]                   = std::to_string(fmt.fmt.pix.height);
++            sensor_descriptor->encoding_format = format.to_string();
++            break;
++        }
++        case v4l2_fourcc('P', 'S', 'E', '2'): {
++            StreamFormat format("EVT21");
++            format["width"]                    = std::to_string(fmt.fmt.pix.width);
++            format["height"]                   = std::to_string(fmt.fmt.pix.height);
++            sensor_descriptor->encoding_format = format.to_string();
++            break;
++        }
++        case v4l2_fourcc('P', 'S', 'E', '3'): {
++            StreamFormat format("EVT3");
++            format["width"]                    = std::to_string(fmt.fmt.pix.width);
++            format["height"]                   = std::to_string(fmt.fmt.pix.height);
++            sensor_descriptor->encoding_format = format.to_string();
++            break;
++        }
++        default:
++            // Possibly hacky configuration to get things working. Assume default format
++            break;
++        }
++    }
+     auto cap           = ctrl->get_capability();
+     auto software_info = device_builder.get_plugin_software_info();
+     auto hw_identification =
+-- 
+2.39.2
+

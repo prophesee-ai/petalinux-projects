@@ -1,0 +1,206 @@
+From efd89efceb7101c9b6ec51c85e47f04deb9de2c4 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Wed, 10 Jan 2024 12:02:35 +0100
+Subject: [PATCH 06/13] [MV-1764] Remove obsolete user_ptr implementation
+
+Following the MMAP implementation, an up-to-date implementation
+would be a V4l2Allocator taking a DmaBufHeap argument, and building
+a V4l2UserPtrAllocation (to be defined) from it.
+---
+ .../include/boards/v4l2/v4l2_user_ptr_data.h  |  66 -----------
+ .../src/boards/v4l2/v4l2_user_ptr_data.cpp    | 110 ------------------
+ 2 files changed, 176 deletions(-)
+ delete mode 100644 hal_psee_plugins/include/boards/v4l2/v4l2_user_ptr_data.h
+ delete mode 100644 hal_psee_plugins/src/boards/v4l2/v4l2_user_ptr_data.cpp
+
+diff --git a/hal_psee_plugins/include/boards/v4l2/v4l2_user_ptr_data.h b/hal_psee_plugins/include/boards/v4l2/v4l2_user_ptr_data.h
+deleted file mode 100644
+index 2be16fd986..0000000000
+--- a/hal_psee_plugins/include/boards/v4l2/v4l2_user_ptr_data.h
++++ /dev/null
+@@ -1,66 +0,0 @@
+-/**********************************************************************************************************************
+- * Copyright (c) Prophesee S.A.                                                                                       *
+- *                                                                                                                    *
+- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
+- * you may not use this file except in compliance with the License.                                                   *
+- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0                                 *
+- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed   *
+- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                      *
+- * See the License for the specific language governing permissions and limitations under the License.                 *
+- **********************************************************************************************************************/
+-
+-#ifndef METAVISION_HAL_PSEE_PLUGINS_V4L2_USER_PTR_DATA_H
+-#define METAVISION_HAL_PSEE_PLUGINS_V4L2_USER_PTR_DATA_H
+-
+-#include <memory>
+-#include <utility>
+-#include <vector>
+-
+-namespace Metavision {
+-
+-/** Manage buffer manipulation through the V4L2 interface.
+- * In this implementation, buffers are allocated in user space using a dma_buf allocator. This allocator allocates
+- * continuous buffers in physical memory which is necessary as buffers are used by DMA without gather/scatter
+- * facility.
+- */
+-class DmaBufHeap;
+-class V4L2DeviceControl;
+-
+-class V4l2DeviceUserPtr {
+-public:
+-    V4l2DeviceUserPtr(std::shared_ptr<V4L2DeviceControl> device, const std::string &heap_path, const std::string &heap_name,
+-                      std::size_t length = 8 * 1024 * 1024, unsigned int nb_buffers = 32);
+-
+-    virtual ~V4l2DeviceUserPtr();
+-
+-    /** Poll a MIPI frame buffer through the V4L2 interface.
+-     * Return the buffer index.
+-     * */
+-    int poll_buffer() const;
+-
+-    /** Queue the buffer designed by the index to the driver. */
+-    void release_buffer(int idx) const;
+-
+-    unsigned int get_nb_buffers() const;
+-
+-    /** Return the buffer address and size (in bytes) designed by the index. */
+-    std::pair<void *, std::size_t> get_buffer_desc(int idx) const;
+-
+-    void free_buffers();
+-
+-private:
+-    struct BufferDesc {
+-        void *start;
+-        unsigned int dmabuf_fd;
+-    };
+-
+-    std::shared_ptr<V4L2DeviceControl> device_;
+-    std::unique_ptr<DmaBufHeap> dma_buf_heap_;
+-    std::size_t length_;
+-    std::vector<BufferDesc> buffers_desc_;
+-
+-    void allocate_buffers(unsigned int nb_buffers);
+-};
+-} // namespace Metavision
+-
+-#endif // METAVISION_HAL_PSEE_PLUGINS_V4L2_USER_PTR_DATA_H
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_user_ptr_data.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_user_ptr_data.cpp
+deleted file mode 100644
+index a2d3c1c68f..0000000000
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_user_ptr_data.cpp
++++ /dev/null
+@@ -1,110 +0,0 @@
+-/**********************************************************************************************************************
+- * Copyright (c) Prophesee S.A.                                                                                       *
+- *                                                                                                                    *
+- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
+- * you may not use this file except in compliance with the License.                                                   *
+- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0                                 *
+- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed   *
+- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                      *
+- * See the License for the specific language governing permissions and limitations under the License.                 *
+- **********************************************************************************************************************/
+-
+-#include <chrono>
+-#include <thread>
+-#include <sys/mman.h>
+-
+-#include "boards/v4l2/dma_buf_heap.h"
+-#include "boards/v4l2/v4l2_device.h"
+-#include "boards/v4l2/v4l2_user_ptr_data.h"
+-
+-#include "metavision/hal/utils/hal_log.h"
+-
+-using namespace Metavision;
+-
+-V4l2DeviceUserPtr::V4l2DeviceUserPtr(std::shared_ptr<V4L2DeviceControl> device, const std::string &heap_path,
+-                                     const std::string &heap_name, std::size_t length, unsigned int nb_buffers) :
+-    device_(device), dma_buf_heap_(std::make_unique<DmaBufHeap>(heap_path, heap_name)), length_(length) {
+-    auto granted_buffers = device->request_buffers(V4L2_MEMORY_USERPTR, nb_buffers);
+-    MV_HAL_LOG_INFO() << "V4l2 - Requested buffers: " << nb_buffers << " granted buffers: " << granted_buffers.count
+-                      << std::endl;
+-
+-    for (unsigned int i = 0; i < granted_buffers.count; ++i) {
+-        /* Get a buffer using CMA allocator in user space. */
+-        auto dmabuf_fd = dma_buf_heap_->alloc(length_);
+-
+-        void *start = mmap(NULL, length_, PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd, 0);
+-        if (MAP_FAILED == start)
+-            raise_error("mmap failed");
+-
+-        dma_buf_heap_->cpu_sync_start(dmabuf_fd);
+-        memset(start, 0, length_);
+-
+-        MV_HAL_LOG_TRACE() << "Allocate buffer: " << i << " at: " << std::hex << start << " of " << std::dec << length_
+-                           << " bytes." << std::endl;
+-
+-        /* Record the handle to manage the life cycle. */
+-        buffers_desc_.push_back(BufferDesc{start, dmabuf_fd});
+-    }
+-}
+-
+-V4l2DeviceUserPtr::~V4l2DeviceUserPtr() {
+-    free_buffers();
+-}
+-
+-/** Release the buffer designed by the index to the driver. */
+-void V4l2DeviceUserPtr::release_buffer(int idx) const {
+-    auto desc = buffers_desc_.at(idx);
+-
+-    dma_buf_heap_->cpu_sync_stop(desc.dmabuf_fd);
+-
+-    V4l2Buffer buf{0};
+-    buf.type      = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+-    buf.memory    = V4L2_MEMORY_USERPTR;
+-    buf.index     = idx;
+-    buf.m.userptr = (unsigned long)desc.start;
+-    buf.length    = length_;
+-    device_->queue_buffer(buf);
+-}
+-
+-/** Poll a MIPI frame buffer through the V4L2 interface.
+- * Return the buffer index.
+- * */
+-int V4l2DeviceUserPtr::poll_buffer() const {
+-    V4l2Buffer buf{0};
+-    buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+-    buf.memory = V4L2_MEMORY_USERPTR;
+-
+-    while (device_->dequeue_buffer(&buf)) {
+-        using namespace std::literals::chrono_literals;
+-        std::this_thread::sleep_for(1ms);
+-    }
+-
+-    auto desc = buffers_desc_.at(buf.index);
+-    dma_buf_heap_->cpu_sync_start(desc.dmabuf_fd);
+-    return buf.index;
+-}
+-
+-/** Return the buffer address and size (in bytes) designed by the index. */
+-std::pair<void *, std::size_t> V4l2DeviceUserPtr::get_buffer_desc(int idx) const {
+-    auto desc = buffers_desc_.at(idx);
+-    return std::make_pair(desc.start, V4L2DeviceControl::nb_not_null_data(desc.start, length_));
+-}
+-
+-void V4l2DeviceUserPtr::free_buffers() {
+-    int i = get_nb_buffers();
+-
+-    while (0 < i) {
+-        auto idx = poll_buffer();
+-        auto buf = buffers_desc_.at(idx);
+-        if (-1 == munmap(buf.start, length_))
+-            raise_error("munmap failed");
+-        dma_buf_heap_->free(buf.dmabuf_fd);
+-        --i;
+-    }
+-
+-    buffers_desc_.clear();
+-}
+-
+-unsigned int V4l2DeviceUserPtr::get_nb_buffers() const {
+-    return buffers_desc_.size();
+-}
+-- 
+2.39.2
+

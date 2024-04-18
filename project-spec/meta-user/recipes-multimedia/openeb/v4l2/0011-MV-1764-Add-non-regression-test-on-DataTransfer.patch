@@ -1,0 +1,179 @@
+From ffc1fdf8b41a183d914adb73fc8921a5248f305d Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Tue, 23 Jan 2024 17:21:21 +0100
+Subject: [PATCH 11/13] [MV-1764] Add non-regression test on DataTransfer
+
+The V4L2 implementation relies on behaviors such as the non-propagation
+of the allocator to vector copies, and non zero-set on resize, those
+tests aim to catch changes in those behaviors without requiring live
+camera
+---
+ hal/cpp/test/dummy_datatransfer.h             | 45 ++++++++++++
+ .../dummy_test_plugin_facilities_builder.cpp  |  7 +-
+ hal/cpp/test/dummy_test_plugin_gtest.cpp      | 68 ++++++++++++++++++-
+ 3 files changed, 113 insertions(+), 7 deletions(-)
+ create mode 100644 hal/cpp/test/dummy_datatransfer.h
+
+diff --git a/hal/cpp/test/dummy_datatransfer.h b/hal/cpp/test/dummy_datatransfer.h
+new file mode 100644
+index 0000000000..c863d1190c
+--- /dev/null
++++ b/hal/cpp/test/dummy_datatransfer.h
+@@ -0,0 +1,45 @@
++/**********************************************************************************************************************
++ * Copyright (c) Prophesee S.A.                                                                                       *
++ *                                                                                                                    *
++ * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
++ * you may not use this file except in compliance with the License.                                                   *
++ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0                                 *
++ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed   *
++ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                      *
++ * See the License for the specific language governing permissions and limitations under the License.                 *
++ **********************************************************************************************************************/
++
++#ifndef METAVISION_HAL_TEST_DUMMY_DATATRANSFER_H
++#define METAVISION_HAL_TEST_DUMMY_DATATRANSFER_H
++
++// This DataTransfer will transfer 255 values an incremental counter on buffers doubling length at each iteration
++// as follows: {0}, {1, 2}, {3, 4, 5, 6}, {7, 8, 9, 10, 11, 12, 13, 14}, ...
++// The DummyAllocator has no specific behavior and is just meant to check DataTransfer::Allocator properties
++
++struct DummyDataTransfer : public Metavision::DataTransfer {
++    using Allocator = Metavision::DataTransfer::Allocator;
++    class DummyAllocator : public Allocator::Impl {};
++
++    DummyDataTransfer() :
++        Metavision::DataTransfer(1, BufferPool::make_bounded(4, Allocator(Allocator::ImplPtr(new DummyAllocator())))) {}
++
++    virtual void run_impl() override {
++        auto buff   = get_buffer();
++        int size    = 1;
++        int counter = 0;
++        // On the first buffer we put a known data (42) to be able to check that resize does not erase it.
++        buff->reserve(128);
++        *(buff->data() + 1) = 42;
++        for (int i = 0; (i < 8) && !should_stop(); i++) {
++            buff->resize(size);
++            for (auto &data : *buff) {
++                data = counter++;
++            }
++            auto [next, dropped] = transfer_data(buff);
++            size *= 2;
++            buff = next;
++        }
++    }
++};
++
++#endif // METAVISION_HAL_TEST_DUMMY_DATATRANSFER_H
+diff --git a/hal/cpp/test/dummy_test_plugin_facilities_builder.cpp b/hal/cpp/test/dummy_test_plugin_facilities_builder.cpp
+index fed770bf02..1783f18229 100644
+--- a/hal/cpp/test/dummy_test_plugin_facilities_builder.cpp
++++ b/hal/cpp/test/dummy_test_plugin_facilities_builder.cpp
+@@ -40,6 +40,7 @@
+ #include <metavision/hal/utils/camera_discovery.h>
+ 
+ #include "dummy_test_plugin_facilities.h"
++#include "dummy_datatransfer.h"
+ 
+ using namespace Metavision;
+ 
+@@ -95,12 +96,6 @@ struct DummyROI : public I_ROI {
+     std::vector<bool> rows_, cols_;
+ };
+ 
+-struct DummyDataTransfer : public DataTransfer {
+-    DummyDataTransfer() : DataTransfer(1) {}
+-
+-    virtual void run_impl() override {}
+-};
+-
+ struct DummyFileHWIdentification : public I_HW_Identification {
+     DummyFileHWIdentification(const std::shared_ptr<I_PluginSoftwareInfo> &plugin_sw_info,
+                               const RawFileHeader &header) :
+diff --git a/hal/cpp/test/dummy_test_plugin_gtest.cpp b/hal/cpp/test/dummy_test_plugin_gtest.cpp
+index b7d863568f..c82554a5f3 100644
+--- a/hal/cpp/test/dummy_test_plugin_gtest.cpp
++++ b/hal/cpp/test/dummy_test_plugin_gtest.cpp
+@@ -33,6 +33,7 @@
+ #include "metavision/hal/facilities/i_trigger_out.h"
+ 
+ #include "dummy_test_plugin_facilities.h"
++#include "dummy_datatransfer.h"
+ 
+ using namespace Metavision;
+ using namespace ::testing;
+@@ -78,4 +79,69 @@ TEST_F(DummyTestPluginTest, should_have_facilities_multi_version_facility) {
+     EXPECT_THAT(dummy_device->get_facility<DummyFacilityV3>(), NotNull());
+     EXPECT_EQ(dummy_device->get_facility<DummyFacilityV1>(), dummy_device->get_facility<DummyFacilityV2>());
+     EXPECT_EQ(dummy_device->get_facility<DummyFacilityV2>(), dummy_device->get_facility<DummyFacilityV3>());
+-}
+\ No newline at end of file
++}
++
++TEST_F(DummyTestPluginTest, should_stream) {
++    // DummyDataTransfer generates an incrementing pattern
++    int counter       = 0;
++    auto event_stream = dummy_device->get_facility<I_EventsStream>();
++    EXPECT_THAT(event_stream, NotNull());
++
++    event_stream->start();
++
++    do {
++        // DummyDataTransfer sends 8 buffers of up to 128 bytes
++        // it is assumed that this test will make DummyDataTransfer run out of buffers
++        // (it has a bounded pool and can't drop)
++        // but this depends on runner's perfomances
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++        auto buffer = event_stream->get_latest_raw_data();
++        for (auto &data : *buffer) {
++            EXPECT_EQ(data, counter++);
++        }
++    } while (event_stream->poll_buffer() > 0);
++    // DummyDataTransfer sends 255 values
++    EXPECT_EQ(counter, 255);
++
++    event_stream->stop();
++}
++
++TEST_F(DummyTestPluginTest, can_copy_buffers_outside_of_the_pool) {
++    DataTransfer::Buffer outsider;
++    auto event_stream = dummy_device->get_facility<I_EventsStream>();
++    EXPECT_THAT(event_stream, NotNull());
++
++    event_stream->start();
++
++    event_stream->wait_next_buffer();
++    auto buffer = event_stream->get_latest_raw_data();
++    event_stream->stop();
++    outsider = *buffer;
++    // A copy of a buffer shall be equal
++    EXPECT_EQ(*buffer, outsider);
++    // Buffer shall come from the DummyPlugin BufferPool
++    EXPECT_THAT(dynamic_cast<DummyDataTransfer::DummyAllocator *>(buffer->get_allocator().get_impl().get()), NotNull());
++    // Buffer shall use the default DataTransfer::Allocator
++    EXPECT_THAT(dynamic_cast<DummyDataTransfer::DummyAllocator *>(outsider.get_allocator().get_impl().get()), IsNull());
++}
++
++TEST_F(DummyTestPluginTest, resize_does_not_erase_data) {
++    // On a typical Datatransfer, data is transfered to a buffer, and then the vector is resized to the useful
++    // data. To make this work, the default constructor is not called, to avoid rewriting data if the resize is
++    // larger than the previous size. Without neutralizing the constructor, the vector could be resized to
++    // max size before transfer, but this would cause to needlessly rewrite the previously unused part of the buffer
++    // wasting CPU time and memory access time
++
++    // To test this, DummyDataTransfer put a magic value (42) in the first buffer, after the declared size
++    // so that we can test here that it is not rewritten on resize
++    auto event_stream = dummy_device->get_facility<I_EventsStream>();
++    EXPECT_THAT(event_stream, NotNull());
++    event_stream->start();
++    event_stream->wait_next_buffer();
++    auto buffer = event_stream->get_latest_raw_data();
++    event_stream->stop();
++
++    EXPECT_EQ(buffer->size(), 1);
++    buffer->resize(2);
++    EXPECT_EQ((*buffer)[1], 42);
++}
+-- 
+2.39.2
+

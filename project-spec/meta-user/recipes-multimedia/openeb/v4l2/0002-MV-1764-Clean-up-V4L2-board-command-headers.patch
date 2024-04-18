@@ -1,0 +1,38 @@
+From dca39ecebfb2244044b3d66e9ce378f9e68607b3 Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Wed, 3 Jan 2024 17:00:32 +0100
+Subject: [PATCH 02/13] [MV-1764] Clean-up V4L2 board command headers
+
+This is dead code from libatis/kaer
+---
+ .../src/boards/v4l2/v4l2_board_command.cpp            | 11 -----------
+ 1 file changed, 11 deletions(-)
+
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_board_command.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_board_command.cpp
+index 593c0f3db7..c1506114da 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_board_command.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_board_command.cpp
+@@ -27,20 +27,9 @@
+ #include "boards/v4l2/v4l2_device.h"
+ #include "boards/v4l2/v4l2_data_transfer.h"
+ #include "metavision/psee_hw_layer/boards/v4l2/v4l2_board_command.h"
+-#include "boards/treuzell/treuzell_command_definition.h"
+-#include "metavision/psee_hw_layer/boards/treuzell/tz_control_frame.h"
+-#include "devices/utils/device_system_id.h"
+ #include "metavision/hal/utils/hal_exception.h"
+ #include "utils/psee_hal_plugin_error_code.h"
+ 
+-#ifdef USE_JAVA_BINDINGS
+-#include "is_usb_java.h"
+-#endif
+-
+-#define PSEE_EVK_PROTOCOL 0
+-
+-#define TZ_MAX_ANSWER_SIZE 1024
+-
+ namespace Metavision {
+ 
+ V4L2BoardCommand::V4L2BoardCommand(std::string device_path) {
+-- 
+2.39.2
+

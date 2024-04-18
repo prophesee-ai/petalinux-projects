@@ -1,0 +1,140 @@
+From 634e5af6ac54d8bd4f5a2d2c7adcc6f22131b1ae Mon Sep 17 00:00:00 2001
+From: Christian Dreher <cdreher@prophesee.ai>
+Date: Thu, 25 Jan 2024 20:11:08 +0100
+Subject: [PATCH 09/13] [MV-1764] Implement explicit cache operations when
+ needed
+
+---
+ .../include/boards/v4l2/v4l2_data_transfer.h  | 11 +++++++
+ .../src/boards/v4l2/v4l2_data_transfer.cpp    | 29 +++++++++++++++----
+ .../src/boards/v4l2/v4l2_dmabuf_allocator.cpp | 14 ++++++++-
+ 3 files changed, 48 insertions(+), 6 deletions(-)
+
+diff --git a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+index 43bb6a841f..c7f2f4f520 100644
+--- a/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
++++ b/hal_psee_plugins/include/boards/v4l2/v4l2_data_transfer.h
+@@ -58,6 +58,8 @@ private:
+         }
+         // Get a descriptor usable with V4L2 API from a data pointer
+         virtual void fill_v4l2_buffer(void *, V4l2Buffer &) const = 0;
++        virtual void begin_cpu_access(void *) const {}
++        virtual void end_cpu_access(void *) const {}
+     };
+ 
+     class V4l2MmapAllocator : public V4l2Allocator {
+@@ -81,6 +83,8 @@ private:
+         void *allocate(size_t n, size_t data_size) override;
+         void deallocate(void *p, size_t n, size_t data_size) override;
+         void fill_v4l2_buffer(void *, V4l2Buffer &) const override;
++        void begin_cpu_access(void *) const override;
++        void end_cpu_access(void *) const override;
+ 
+     public:
+         DmabufAllocator(int fd, std::unique_ptr<DmaBufHeap> &&);
+@@ -91,8 +95,15 @@ private:
+         std::map<void *, int> mapping_;
+         // Dmabuf heap where the memory is allocated
+         std::unique_ptr<DmaBufHeap> dmabuf_heap_;
++        // A helper to get the fd from a pointer
++        int fd(void *) const;
+     };
++
++    // A helper to get the right allocator, and calls to its methods
++    V4l2Allocator &v4l2_alloc(BufferPtr &) const;
+     void fill_v4l2_buffer(BufferPtr &, V4l2Buffer &) const;
++    void begin_cpu_access(BufferPtr &) const;
++    void end_cpu_access(BufferPtr &) const;
+ };
+ 
+ } // namespace Metavision
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
+index db678cd1b0..8d07891c07 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_data_transfer.cpp
+@@ -145,6 +145,9 @@ void V4l2DataTransfer::run_impl() {
+ 
+         MV_HAL_LOG_DEBUG() << "Grabbed buffer" << buf.index << "of:" << buf.bytesused << "Bytes.";
+ 
++        // Advertise CPU operations to allow cache maintenance
++        begin_cpu_access(queued_buffers_[buf.index]);
++
+         // Get the vector corresponding to this buffer and transfer the data
+         queued_buffers_[buf.index]->resize(buf.bytesused);
+ 
+@@ -156,6 +159,9 @@ void V4l2DataTransfer::run_impl() {
+         // update it with next information
+         fill_v4l2_buffer(next, buf);
+ 
++        // Advertise end of CPU operations to allow cache maintenance
++        end_cpu_access(next);
++
+         // Queue the next buffer to keep the device running
+         if (ioctl(fd_, VIDIOC_QBUF, &buf) < 0) {
+             throw std::system_error(errno, std::generic_category(), "VIDIOC_QBUF failed");
+@@ -172,6 +178,14 @@ void V4l2DataTransfer::stop_impl() {
+         queued_buffers_[i].reset();
+ }
+ 
++V4l2DataTransfer::V4l2Allocator &V4l2DataTransfer::v4l2_alloc(BufferPtr &buf) const {
++    // The std::vectors in BufferPool are built with a V4l2Allocator, which can do this work
++    V4l2Allocator *alloc = dynamic_cast<V4l2Allocator *>(buf->get_allocator().get_impl().get());
++    if (!alloc)
++        throw std::system_error(EPERM, std::generic_category(), "Impl is expected to be V4l2Allocator");
++    return *alloc;
++}
++
+ // Fills the V4L2 descriptor with the buffer info. This information depends on the Allocator implementation
+ // For instance in MMAP the buffer is mapped to an index of the device
+ // But on DMABUF, the buffer is mapped to a standalone file descriptor
+@@ -185,11 +199,16 @@ void V4l2DataTransfer::fill_v4l2_buffer(BufferPtr &buf, V4l2Buffer &v4l2_buf) co
+     if (!buf->data())
+         buf->reserve(buf->get_allocator().max_size());
+ 
+-    // The std::vectors in BufferPool are built with a V4l2Allocator, which can do this work
+-    V4l2Allocator *alloc = dynamic_cast<V4l2Allocator *>(buf->get_allocator().get_impl().get());
+-    if (!alloc)
+-        throw std::system_error(EPERM, std::generic_category(), "Impl is expected to be V4l2Allocator");
+-    alloc->fill_v4l2_buffer(buf->data(), v4l2_buf);
++    v4l2_alloc(buf).fill_v4l2_buffer(buf->data(), v4l2_buf);
++}
++
++// Call the cache maintenance that fits the memory type
++void V4l2DataTransfer::begin_cpu_access(BufferPtr &buf) const {
++    v4l2_alloc(buf).begin_cpu_access(buf->data());
++}
++
++void V4l2DataTransfer::end_cpu_access(BufferPtr &buf) const {
++    v4l2_alloc(buf).end_cpu_access(buf->data());
+ }
+ 
+ V4l2DataTransfer::V4l2Allocator::V4l2Allocator(int videodev_fd) {
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+index c0189aa9e3..bce11c3336 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_dmabuf_allocator.cpp
+@@ -60,8 +60,20 @@ void V4l2DataTransfer::DmabufAllocator::deallocate(void *p, size_t n, size_t dat
+ }
+ 
+ void V4l2DataTransfer::DmabufAllocator::fill_v4l2_buffer(void *vaddr, V4l2Buffer &buf) const {
++    buf.m.fd = fd(vaddr);
++}
++
++void V4l2DataTransfer::DmabufAllocator::begin_cpu_access(void *vaddr) const {
++    dmabuf_heap_->cpu_sync_start(fd(vaddr));
++}
++
++void V4l2DataTransfer::DmabufAllocator::end_cpu_access(void *vaddr) const {
++    dmabuf_heap_->cpu_sync_stop(fd(vaddr));
++}
++
++int V4l2DataTransfer::DmabufAllocator::fd(void *vaddr) const {
+     auto it = mapping_.find(vaddr);
+     if (it == mapping_.end())
+         throw std::system_error(EINVAL, std::generic_category(), "Requested fd of a non-Dmabuf buffer");
+-    buf.m.fd = it->second;
++    return it->second;
+ }
+-- 
+2.39.2
+

@@ -4133,6 +4133,7 @@ CONFIG_psee-video=y
 # CONFIG_gpio-demo is not set
 CONFIG_packagegroup-petalinux-som=y
 # CONFIG_peekpoke is not set
+CONFIG_metavision=y
 
 #
 # PetaLinux RootFS Settings
