@@ -1,0 +1,82 @@
+From 056bb9c2fc9d2df799b55d8a544a22053efe74fa Mon Sep 17 00:00:00 2001
+From: Adrien Gonzalez <agonzalez@prophesee.ai>
+Date: Fri, 7 Jun 2024 17:41:15 +0200
+Subject: [PATCH] [MV-2025][DEV] Add Psee raw file header support to v4l2 hw
+ identification
+
+---
+ .../boards/v4l2/v4l2_hardware_identification.h | 10 +++++++---
+ .../v4l2/v4l2_hardware_identification.cpp      | 18 +++++++++++++++++-
+ 2 files changed, 24 insertions(+), 4 deletions(-)
+
+diff --git a/hal_psee_plugins/include/boards/v4l2/v4l2_hardware_identification.h b/hal_psee_plugins/include/boards/v4l2/v4l2_hardware_identification.h
+index c26f007..fccdfdd 100644
+--- a/hal_psee_plugins/include/boards/v4l2/v4l2_hardware_identification.h
++++ b/hal_psee_plugins/include/boards/v4l2/v4l2_hardware_identification.h
+@@ -4,13 +4,14 @@
+ #include <linux/videodev2.h>
+ 
+ namespace Metavision {
+-using V4l2Capability     = struct v4l2_capability;
++using V4l2Capability = struct v4l2_capability;
+ 
+ class V4l2HwIdentification : public I_HW_Identification {
+     V4l2Capability cap_;
+ 
+ public:
+-    V4l2HwIdentification(const V4l2Capability cap, const std::shared_ptr<I_PluginSoftwareInfo> &plugin_sw_info, const SensorDescriptor &sensor_descriptor);
++    V4l2HwIdentification(const V4l2Capability cap, const std::shared_ptr<I_PluginSoftwareInfo> &plugin_sw_info,
++                         const SensorDescriptor &sensor_descriptor);
+ 
+     virtual long get_system_id() const override;
+     virtual SensorInfo get_sensor_info() const override;
+@@ -23,5 +24,8 @@ public:
+ protected:
+     virtual DeviceConfigOptionMap get_device_config_options_impl() const override;
+     const SensorDescriptor &sensor_descriptor_;
++
++private:
++    RawFileHeader get_header_impl() const override;
+ };
+-}
++} // namespace Metavision
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_hardware_identification.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_hardware_identification.cpp
+index b666222..392a608 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_hardware_identification.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_hardware_identification.cpp
+@@ -1,5 +1,18 @@
++/**********************************************************************************************************************
++ * Copyright (c) Prophesee S.A.                                                                                       *
++ *                                                                                                                    *
++ * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
++ * you may not use this file except in compliance with the License.                                                   *
++ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0                                 *
++ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed   *
++ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                      *
++ * See the License for the specific language governing permissions and limitations under the License.                 *
++ **********************************************************************************************************************/
++
+ #include "boards/v4l2/v4l2_hardware_identification.h"
+ #include "metavision/hal/facilities/i_plugin_software_info.h"
++#include "metavision/psee_hw_layer/boards/rawfile/psee_raw_file_header.h"
++#include "metavision/psee_hw_layer/utils/psee_format.h"
+ 
+ namespace Metavision {
+ 
+@@ -19,7 +32,7 @@ I_HW_Identification::SensorInfo V4l2HwIdentification::get_sensor_info() const {
+ std::vector<std::string> V4l2HwIdentification::get_available_data_encoding_formats() const {
+     // @TODO Retrieve those info through V4L2
+     auto format = get_current_data_encoding_format();
+-    auto pos = format.find(";");
++    auto pos    = format.find(";");
+     if (pos != std::string::npos) {
+         auto evt_type = format.substr(0, pos);
+         return {evt_type};
+@@ -48,4 +61,7 @@ std::string V4l2HwIdentification::get_connection_type() const {
+ DeviceConfigOptionMap V4l2HwIdentification::get_device_config_options_impl() const {
+     return {};
+ }
++RawFileHeader V4l2HwIdentification::get_header_impl() const {
++    return PseeRawFileHeader{*this, {sensor_descriptor_.encoding_format}};
+ }
++} // namespace Metavision

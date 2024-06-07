@@ -1,0 +1,209 @@
+From 976c03ec688a76ec9d4ee4d97c554356d7ae4e9c Mon Sep 17 00:00:00 2001
+From: Adrien Gonzalez <agonzalez@prophesee.ai>
+Date: Fri, 7 Jun 2024 17:42:54 +0200
+Subject: [PATCH] [MV-2025][DEV] Disable compilation & installation of untested
+ apps
+
+---
+ hal/cpp/samples/CMakeLists.txt                       | 12 +++++++-----
+ hal_psee_plugins/apps/CMakeLists.txt                 |  4 +++-
+ .../samples/metavision_riscv_logger/CMakeLists.txt   |  2 ++
+ .../samples/metavision_file_to_video/CMakeLists.txt  |  2 ++
+ .../cpp/samples/metavision_player/CMakeLists.txt     |  2 ++
+ .../metavision_active_pixel_detection/CMakeLists.txt |  2 ++
+ .../samples/metavision_file_cutter/CMakeLists.txt    |  2 ++
+ .../cpp/samples/metavision_file_info/CMakeLists.txt  |  2 ++
+ .../samples/metavision_file_to_csv/CMakeLists.txt    |  2 ++
+ .../samples/metavision_file_to_dat/CMakeLists.txt    |  2 ++
+ .../samples/metavision_file_to_hdf5/CMakeLists.txt   |  2 ++
+ 11 files changed, 28 insertions(+), 6 deletions(-)
+
+diff --git a/hal/cpp/samples/CMakeLists.txt b/hal/cpp/samples/CMakeLists.txt
+index 5939b70..4dfe671 100644
+--- a/hal/cpp/samples/CMakeLists.txt
++++ b/hal/cpp/samples/CMakeLists.txt
+@@ -9,8 +9,10 @@
+ 
+ add_subdirectory(metavision_hal_showcase)
+ add_subdirectory(metavision_hal_ls)
+-add_subdirectory(metavision_hal_raw_cutter)
+-add_subdirectory(metavision_hal_seek)
+-add_subdirectory(metavision_hal_sync)
+-add_subdirectory(metavision_hal_sample_plugin)
+-add_subdirectory(metavision_platform_info)
+\ No newline at end of file
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
++    add_subdirectory(metavision_hal_seek)
++    add_subdirectory(metavision_hal_sync)
++    add_subdirectory(metavision_hal_raw_cutter)
++    add_subdirectory(metavision_hal_sample_plugin)
++    add_subdirectory(metavision_platform_info)
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+diff --git a/hal_psee_plugins/apps/CMakeLists.txt b/hal_psee_plugins/apps/CMakeLists.txt
+index 9bc947a..ebfcbcf 100644
+--- a/hal_psee_plugins/apps/CMakeLists.txt
++++ b/hal_psee_plugins/apps/CMakeLists.txt
+@@ -7,4 +7,6 @@
+ # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and limitations under the License.
+ 
+-add_subdirectory(metavision_cx3_updater)
+\ No newline at end of file
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
++    add_subdirectory(metavision_cx3_updater)
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+\ No newline at end of file
+diff --git a/hal_psee_plugins/samples/metavision_riscv_logger/CMakeLists.txt b/hal_psee_plugins/samples/metavision_riscv_logger/CMakeLists.txt
+index 19bc583..88f40ca 100644
+--- a/hal_psee_plugins/samples/metavision_riscv_logger/CMakeLists.txt
++++ b/hal_psee_plugins/samples/metavision_riscv_logger/CMakeLists.txt
+@@ -13,10 +13,12 @@ set(common_libraries metavision_hal_discovery MetavisionSDK::base Boost::program
+ add_executable(metavision_riscv_logger metavision_riscv_logger.cpp)
+ target_link_libraries(metavision_riscv_logger PRIVATE ${common_libraries})
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS ${sample}
+     RUNTIME DESTINATION bin
+     COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES
+         ${sample}.cpp 
+diff --git a/sdk/modules/core/cpp/samples/metavision_file_to_video/CMakeLists.txt b/sdk/modules/core/cpp/samples/metavision_file_to_video/CMakeLists.txt
+index f807c34..39edfa4 100644
+--- a/sdk/modules/core/cpp/samples/metavision_file_to_video/CMakeLists.txt
++++ b/sdk/modules/core/cpp/samples/metavision_file_to_video/CMakeLists.txt
+@@ -16,10 +16,12 @@ target_link_libraries(metavision_file_to_video
+         opencv_core opencv_highgui opencv_videoio
+ )
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS metavision_file_to_video
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-core-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES metavision_file_to_video.cpp
+         DESTINATION share/metavision/sdk/core/cpp_samples/metavision_file_to_video
+diff --git a/sdk/modules/core/cpp/samples/metavision_player/CMakeLists.txt b/sdk/modules/core/cpp/samples/metavision_player/CMakeLists.txt
+index e0d6b0d..2457a6f 100644
+--- a/sdk/modules/core/cpp/samples/metavision_player/CMakeLists.txt
++++ b/sdk/modules/core/cpp/samples/metavision_player/CMakeLists.txt
+@@ -24,11 +24,13 @@ target_link_libraries(metavision_player
+ )
+ target_include_directories(metavision_player PRIVATE inc)
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(
+     TARGETS metavision_player
+     RUNTIME DESTINATION bin
+     COMPONENT metavision-sdk-core-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ # Install source code
+ install(FILES CMakeLists.txt.install
+diff --git a/sdk/modules/driver/cpp/samples/metavision_active_pixel_detection/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_active_pixel_detection/CMakeLists.txt
+index a85b2e8..579942b 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_active_pixel_detection/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_active_pixel_detection/CMakeLists.txt
+@@ -14,10 +14,12 @@ add_executable(${sample} ${sample}.cpp $<TARGET_OBJECTS:metavision_psee_hw_layer
+ target_include_directories(${sample} PRIVATE metavision_psee_hw_layer_obj)
+ target_link_libraries(${sample} PRIVATE ${common_libraries} metavision_psee_hw_layer_obj)
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS ${sample}
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES ${sample}.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/${sample}
+diff --git a/sdk/modules/driver/cpp/samples/metavision_file_cutter/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_file_cutter/CMakeLists.txt
+index ee9b9d5..47444c0 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_file_cutter/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_file_cutter/CMakeLists.txt
+@@ -10,10 +10,12 @@
+ add_executable(metavision_file_cutter metavision_file_cutter.cpp)
+ target_link_libraries(metavision_file_cutter PRIVATE MetavisionSDK::driver Boost::program_options Threads::Threads)
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS metavision_file_cutter
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES metavision_file_cutter.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/metavision_file_cutter
+diff --git a/sdk/modules/driver/cpp/samples/metavision_file_info/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_file_info/CMakeLists.txt
+index 38a97cd..180f194 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_file_info/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_file_info/CMakeLists.txt
+@@ -10,10 +10,12 @@
+ add_executable(metavision_file_info metavision_file_info.cpp)
+ target_link_libraries(metavision_file_info PRIVATE MetavisionSDK::driver Boost::program_options Boost::filesystem Threads::Threads)
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS metavision_file_info
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES metavision_file_info.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/metavision_file_info
+diff --git a/sdk/modules/driver/cpp/samples/metavision_file_to_csv/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_file_to_csv/CMakeLists.txt
+index c0ea7a1..ad7bcec 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_file_to_csv/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_file_to_csv/CMakeLists.txt
+@@ -13,10 +13,12 @@ set (common_libraries MetavisionSDK::core MetavisionSDK::driver Boost::program_o
+ add_executable(${sample} ${sample}.cpp)
+ target_link_libraries(${sample} PRIVATE ${common_libraries})
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS ${sample}
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES ${sample}.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/${sample}
+diff --git a/sdk/modules/driver/cpp/samples/metavision_file_to_dat/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_file_to_dat/CMakeLists.txt
+index dd75965..fcaaa8a 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_file_to_dat/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_file_to_dat/CMakeLists.txt
+@@ -10,10 +10,12 @@
+ add_executable(metavision_file_to_dat metavision_file_to_dat.cpp)
+ target_link_libraries(metavision_file_to_dat PRIVATE MetavisionSDK::core MetavisionSDK::driver Boost::program_options)
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS metavision_file_to_dat
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES metavision_file_to_dat.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/metavision_file_to_dat
+diff --git a/sdk/modules/driver/cpp/samples/metavision_file_to_hdf5/CMakeLists.txt b/sdk/modules/driver/cpp/samples/metavision_file_to_hdf5/CMakeLists.txt
+index 02559a1..818bc6f 100644
+--- a/sdk/modules/driver/cpp/samples/metavision_file_to_hdf5/CMakeLists.txt
++++ b/sdk/modules/driver/cpp/samples/metavision_file_to_hdf5/CMakeLists.txt
+@@ -12,10 +12,12 @@ target_compile_definitions(metavision_file_to_hdf5 PRIVATE ${HDF5_DEFINITIONS} $
+ target_include_directories(metavision_file_to_hdf5 PRIVATE ${HDF5_INCLUDE_DIRS})
+ target_link_libraries(metavision_file_to_hdf5 PRIVATE MetavisionSDK::core MetavisionSDK::driver Boost::program_options ${HDF5_LIBRARIES})
+ 
++if (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ install(TARGETS metavision_file_to_hdf5
+         RUNTIME DESTINATION bin
+         COMPONENT metavision-sdk-driver-bin
+ )
++endif (NOT ANDROID AND NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ 
+ install(FILES metavision_file_to_hdf5.cpp
+         DESTINATION share/metavision/sdk/driver/cpp_samples/metavision_file_to_hdf5

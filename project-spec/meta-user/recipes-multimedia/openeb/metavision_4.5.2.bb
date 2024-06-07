@@ -52,3 +52,5 @@ SRC_URI += "file://0010-MV-1764-Use-a-DMABUF-allocator-when-V4L2_HEAP-is-set.pat
 SRC_URI += "file://0011-MV-1764-Add-non-regression-test-on-DataTransfer.patch"
 SRC_URI += "file://0012-MV-1764-Split-up-Allocator-interface-to-ease-re-usag.patch"
 SRC_URI += "file://0013-Hack-to-sensor-sensor-path-via-V4L2_SENSOR_PATH-envi.patch"
+SRC_URI += "file://0014-MV-2025-DEV-Add-Psee-raw-file-header-support-to-v4l2.patch"
+SRC_URI += "file://0015-MV-2025-DEV-Disable-compilation-installation-of-unte.patch"
