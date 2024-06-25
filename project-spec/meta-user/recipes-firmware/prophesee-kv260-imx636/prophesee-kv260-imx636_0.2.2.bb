@@ -12,6 +12,7 @@ SRC_URI = "file://pl-imx636.dtsi \
 XSA_FILE = "kv260_v0_2_2.xsa"
 # Get the XSA from the github artifacts
 SRC_URI += "https://github.com/prophesee-ai/fpga-projects/releases/download/v0.2.2/${XSA_FILE}"
+SRC_URI[sha256sum] = "d2419743d2302be3a749b9f3672721eaeea9408d4944d6394fa77732eca60f04"
 # Get the XSA from the "files" folder next to this recipe
 #SRC_URI += "file://${XSA_FILE}"
 
