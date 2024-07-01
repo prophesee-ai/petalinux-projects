@@ -5,7 +5,7 @@ LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=12f884d2ae1ff87c09e5b7ccc2c4ca7e"
 
 SRC_URI = "git://git@github.com/prophesee-ai/zynq-video-drivers.git;protocol=ssh;branch=kernel-5.15"
-SRCREV = "7db57e24223e7f132b3d8ee3fb4259dda9bf7436"
+SRCREV = "6d23633efc77b817fe37a53ad548a3eac0356f78"
 
 SRC_URI += "file://avoid-descriptor-link-corruption.patch"
 

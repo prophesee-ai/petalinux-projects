@@ -54,3 +54,4 @@ SRC_URI += "file://0012-MV-1764-Split-up-Allocator-interface-to-ease-re-usag.pat
 SRC_URI += "file://0013-Hack-to-sensor-sensor-path-via-V4L2_SENSOR_PATH-envi.patch"
 SRC_URI += "file://0014-MV-2025-DEV-Add-Psee-raw-file-header-support-to-v4l2.patch"
 SRC_URI += "file://0015-MV-2025-DEV-Disable-compilation-installation-of-unte.patch"
+SRC_URI += "file://0016-Genx320-MP-chip-id.patch"

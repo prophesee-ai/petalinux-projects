@@ -4119,6 +4119,7 @@ CONFIG_Init-manager-systemd=y
 #
 # apps 
 #
+CONFIG_prophesee-kv260-genx320=y
 CONFIG_prophesee-kv260-imx636=y
 
 #
