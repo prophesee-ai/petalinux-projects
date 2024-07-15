@@ -1,9 +1,8 @@
-Integrate this design a project
-===============================
+Integrate this design in a project
+==================================
 
-This project demonstrates a system image build with streaming capabilities and
-a display of streamed events. This section describes the parts integrated in the
-image to help integrate part or all of it in an other project.
+This project showcases a system image build with streaming capabilities and the display of streamed events.
+This section details the components integrated into the image to assist in incorporating part or all of it into another project.
 
 The base of the project is using `Petalinux 2022.2
 <https://www.xilinx.com/support/download/index.html/content/xilinx/en/downloadNav/embedded-design-tools/archive.html>`_,
@@ -48,7 +47,7 @@ add the following information in the hardware description:
 
 - The pca9546 I2C mux used on the KV260 board
 
-- The CCAM5 camera module with an IMX646
+- The CCAM5 camera module with an event-based sensor (IMX636 or GenX320)
 
 
 Prophesee linux-sensor-drivers
@@ -154,14 +153,14 @@ a Linux kernel way to describe physical memory buffers from applications.
 
 With these patches, when a Metavision application is run with the ``V4L2_HEAP``
 environment variable set to the name of a DMA heap, it uses this heap to
-allocate the buffer memory. In this project exemples, the heap called
+allocate the buffer memory. In this project examples, the heap called
 ``reserved`` is used, it is a heap created by petalinux default configuration,
 by the ``cma=900M`` in the kernel command line, where cma stands for
 `contiguous memory allocator <https://lwn.net/Articles/396707/>`_.
 
 If ``V4L2_HEAP`` is not set, the default V4L2 allocator will be used. This
 results in poor decoding performances, and it is assumed that, by default, V4L2
-allocates non-cachable memory, as this avoids cache maintenance considarations,
+allocates non-cachable memory, as this avoids cache maintenance considerations,
 and a CPU is inefficient to handle the usual (frame-based) data of V4L2 devices.
 
 Enable ``VIDEO_ADV_DEBUG`` in the kernel
@@ -180,26 +179,26 @@ implementation.
 
 Metavision also does register accesses before the streaming, while the driver
 does not necessarily keep the sensor powered-up. This can be addressed at
-runtime by explicitely requesting the sensor to be powered before running
+runtime by explicitly requesting the sensor to be powered before running
 Metavision. This can be done from the console using:
 
 .. code:: none
 
-	echo on > /sys/class/video4linux/v4l-subdev3/device/power/control
+    echo on > /sys/class/video4linux/v4l-subdev3/device/power/control
 
 The sensor may be brought back to its normal behaviour using:
 
 .. code:: none
 
-	echo auto > /sys/class/video4linux/v4l-subdev3/device/power/control
+    echo auto > /sys/class/video4linux/v4l-subdev3/device/power/control
 
-It is assumed in both these commands that the sensor has beed probed as
+It is assumed in both these commands that the sensor has been probed as
 ``v4l-subdev3``.
 
 ``V4L2_SENSOR_PATH``
 ~~~~~~~~~~~~~~~~~~~~
 
-The V4L2 code present in Metaivision expects the sensor to be
+The V4L2 code present in Metavision expects the sensor to be
 ``/dev/v4l-subdev1``, and there is no media controller implementation to find
 the actual sensor device. With the acquisition pipeline used in this project,
 the sensor is usually probed as ``/dev/v4l-subdev3``, and an other patch allows

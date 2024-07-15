@@ -46,7 +46,7 @@ Serial baudrate is 115200, 8 bits data, no parity, 1 stop bit, without hardware 
 On the Kria, login is root and password is root, prepare the FPGA design as follows:
 
 	# load and set the pipeline with the default script
-	load-prophesee-kv260-imx636.sh
+	load-prophesee-kv260-<sensor>.sh
 
 Then you can start a viewer either on a screen plugged to the board, or on your computer,
 streaming the display over ethernet. In both case, Metavision requires some information regarding
