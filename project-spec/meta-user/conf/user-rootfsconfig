@@ -9,3 +9,4 @@ CONFIG_psee-video
 CONFIG_prophesee-kv260-imx636
 CONFIG_prophesee-kv260-genx320
 CONFIG_metavision
+CONFIG_metavision-active-marker-3d-tracking
