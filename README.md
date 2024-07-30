@@ -23,7 +23,7 @@ Then run Petalinux tools to build the system and generate a microSD card image.
 
 	source <path-to-installed-PetaLinux>/settings.sh
 	petalinux-build
-	petalinux-package --wic --bootfiles "ramdisk.cpio.gz.u-boot boot.scr Image system.dtb"
+	petalinux-package --wic --bootfiles "ramdisk.cpio.gz.u-boot,boot.scr,Image,system.dtb,system-zynqmp-sck-kv-g-revB.dtb"
 
 ### Write the microSD card
 
