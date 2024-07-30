@@ -1,0 +1,3 @@
+# Archives are to be fetched separately from Prophesee
+*.zip
+*.tar.gz

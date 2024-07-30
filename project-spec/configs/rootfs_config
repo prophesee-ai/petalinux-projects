@@ -4135,6 +4135,7 @@ CONFIG_psee-video=y
 CONFIG_packagegroup-petalinux-som=y
 # CONFIG_peekpoke is not set
 CONFIG_metavision=y
+# CONFIG_metavision-active-marker-3d-tracking is not set
 
 #
 # PetaLinux RootFS Settings
