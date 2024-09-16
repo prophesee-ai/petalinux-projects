@@ -1,12 +1,12 @@
 DESCRIPTION = "C++ implementation of Lie Groups using Eigen."
 SECTION = "devel"
 LICENSE = "MIT"
-LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=400f4cadec03da3053fcbc6abcdf6730"
+LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=8f78120fdd8782ba44f0f9cd9a4a393b"
 
 DEPENDS = "libeigen"
 
 SRC_URI = "git://github.com/strasdat/Sophus.git;protocol=https;nobranch=1"
-SRCREV = "d0b7315a0d90fc6143defa54596a3a95d9fa10ec"
+SRCREV = "de0f8d3d92bf776271e16de56d1803940ebccab9"
 
 S = "${WORKDIR}/git"
 
