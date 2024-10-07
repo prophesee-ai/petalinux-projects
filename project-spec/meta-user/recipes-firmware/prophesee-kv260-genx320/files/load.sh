@@ -4,6 +4,7 @@
 # Force load of tkeep handler driver, so that we don't get the pass-through driver
 # probed on tkeep handler
 modprobe psee-tkeep-handler
+modprobe psee-event-stream-smart-tracker
 
 # Load the FPGA
 xmutil unloadapp
