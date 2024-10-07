@@ -21,16 +21,17 @@ DEPENDS = "boost libusb opencv glew glfw libeigen protobuf protobuf-native sophu
 # adding it also as a runtime dependency forces the libopencv_stuff to go in the image
 RDEPENDS:${PN}= "opencv"
 
-inherit cmake
+inherit pkgconfig cmake
 
 EXTRA_OECMAKE = "-DCOMPILE_METAVISION_STUDIO=OFF \
                  -DCOMPILE_PLAYER=OFF \
                  -DUSE_OPENGL_ES2=ON \
                  -DUSE_PROTOBUF=ON \
+                 -DUSE_SOPHUS=ON \
                  -DCOMPILE_PYTHON3_BINDINGS=OFF \
                  -DHDF5_DISABLED=ON \
                  -DBUILD_TESTING=OFF"
 
 SRC_URI = "git://git@github.com/prophesee-ai/openeb.git;protocol=https;nobranch=1"
 
-SRCREV = "ed9783299010276b57b7a3af7f2ba67ee613d4f2"
+SRCREV = "0391df5ab3bea6d0aa2595a73ccee66a1d9c1093"
