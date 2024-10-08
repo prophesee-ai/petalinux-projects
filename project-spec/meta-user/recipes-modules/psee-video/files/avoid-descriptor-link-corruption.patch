@@ -1,4 +1,4 @@
-From ec113538789c6b4de8d46e665689340b0832da96 Mon Sep 17 00:00:00 2001
+From d89d1bdd547c0cbebb4ae154697b449f2c48892a Mon Sep 17 00:00:00 2001
 From: Christian Dreher <cdreher@prophesee.ai>
 Date: Tue, 26 Mar 2024 11:55:00 +0100
 Subject: Reallocate descriptors between each streaming
@@ -7,10 +7,10 @@ Somehow the buffer ordering gets modified on stop (sometimes)
 to hide this, release and request the channel between each run
 
 diff --git a/psee-dma.c b/psee-dma.c
-index 08d52b4..c61b730 100644
+index 11ec2d2..d135fc8 100644
 --- a/psee-dma.c
 +++ b/psee-dma.c
-@@ -508,6 +508,8 @@ static void psee_dma_stop_streaming(struct vb2_queue *vq)
+@@ -538,6 +538,8 @@ static void stop_streaming(struct vb2_queue *vq)
  		list_del(&buf->queue);
  	}
  	spin_unlock_irq(&dma->queued_lock);
@@ -18,8 +18,8 @@ index 08d52b4..c61b730 100644
 +	dma->dma = dma_request_chan(dma->psee_dev->dev, dma->name);
  }
  
- static const struct vb2_ops psee_dma_queue_qops = {
-@@ -831,8 +833,8 @@ int psee_dma_init(struct psee_composite_device *psee_dev, struct psee_dma *dma,
+ static const struct vb2_ops queue_qops = {
+@@ -922,8 +924,8 @@ int psee_dma_init(struct psee_composite_device *psee_dev, struct psee_dma *dma,
  	}
  
  	/* ... and the DMA channel. */
@@ -31,14 +31,14 @@ index 08d52b4..c61b730 100644
  		ret = PTR_ERR(dma->dma);
  		if (ret != -EPROBE_DEFER)
 diff --git a/psee-dma.h b/psee-dma.h
-index d012a98..266bd95 100644
+index 2422678..1bf6fd8 100644
 --- a/psee-dma.h
 +++ b/psee-dma.h
-@@ -84,6 +84,7 @@ struct psee_dma {
+@@ -86,6 +86,7 @@ struct psee_dma {
  
  	void __iomem *iomem;
  	resource_size_t iosize;
 +	char name[16];
  	struct dma_chan *dma;
+ 	struct clk *clk;
  };
- 
