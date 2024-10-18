@@ -34,4 +34,17 @@ EXTRA_OECMAKE = "-DCOMPILE_METAVISION_STUDIO=OFF \
 
 SRC_URI = "git://git@github.com/prophesee-ai/openeb.git;protocol=https;nobranch=1"
 
+# Add ongoing work
+FILESEXTRAPATHS:append := ":${THISDIR}/v4l2"
+
+SRC_URI += "file://0001-V4L2-Enumerate-available-sensor-controls.patch"
+SRC_URI += "file://0002-V4L2-Enumerate-available-media-entities.patch"
+SRC_URI += "file://0003-V4L2-Introducing-ERC-BIAS-and-ROI-V4L2-facilities.patch"
+SRC_URI += "file://0004-V4L2-Update-the-V4L2-device-builder-to-instanciate-v.patch"
+SRC_URI += "file://0005-V4L2-Add-crop-support.patch"
+SRC_URI += "file://0006-V4L2-Introducing-V4L2Crop-facility.patch"
+SRC_URI += "file://0007-V4L2-add-v4l2-device-geometry-helpers.patch"
+SRC_URI += "file://0008-V4L2-ROI-interface-should-not-be-genx320-specific.patch"
+SRC_URI += "file://0009-V4L2-Avoid-breaking-imx636-relative-bias-behaviour.patch"
+
 SRCREV = "0391df5ab3bea6d0aa2595a73ccee66a1d9c1093"
