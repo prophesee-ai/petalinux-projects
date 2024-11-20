@@ -1,0 +1,75 @@
+From 2194e5a7c812977fca64139365402dc910b4e821 Mon Sep 17 00:00:00 2001
+From: Adrien Gonzalez <agonzalez@prophesee.ai>
+Date: Wed, 20 Nov 2024 14:49:35 +0100
+Subject: [PATCH] Disable compilation of OpenEB untested apps
+
+---
+ hal/cpp/samples/CMakeLists.txt                | 6 ------
+ hal_psee_plugins/apps/CMakeLists.txt          | 1 -
+ hal_psee_plugins/samples/CMakeLists.txt       | 4 ----
+ sdk/modules/stream/cpp/samples/CMakeLists.txt | 3 ---
+ 4 files changed, 14 deletions(-)
+
+diff --git a/hal/cpp/samples/CMakeLists.txt b/hal/cpp/samples/CMakeLists.txt
+index 11c134a..3a0400b 100644
+--- a/hal/cpp/samples/CMakeLists.txt
++++ b/hal/cpp/samples/CMakeLists.txt
+@@ -7,11 +7,5 @@
+ # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and limitations under the License.
+ 
+-add_subdirectory(metavision_hal_evk4_sample_plugin)
+ add_subdirectory(metavision_hal_ls)
+-add_subdirectory(metavision_hal_raw_cutter)
+-add_subdirectory(metavision_hal_seek)
+ add_subdirectory(metavision_hal_showcase)
+-add_subdirectory(metavision_hal_sync)
+-add_subdirectory(metavision_hal_toy_sample_plugin)
+-add_subdirectory(metavision_platform_info)
+\ No newline at end of file
+diff --git a/hal_psee_plugins/apps/CMakeLists.txt b/hal_psee_plugins/apps/CMakeLists.txt
+index 9bc947a..f8a4b15 100644
+--- a/hal_psee_plugins/apps/CMakeLists.txt
++++ b/hal_psee_plugins/apps/CMakeLists.txt
+@@ -7,4 +7,3 @@
+ # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and limitations under the License.
+ 
+-add_subdirectory(metavision_cx3_updater)
+\ No newline at end of file
+diff --git a/hal_psee_plugins/samples/CMakeLists.txt b/hal_psee_plugins/samples/CMakeLists.txt
+index fde834f..f8a4b15 100644
+--- a/hal_psee_plugins/samples/CMakeLists.txt
++++ b/hal_psee_plugins/samples/CMakeLists.txt
+@@ -7,7 +7,3 @@
+ # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and limitations under the License.
+ 
+-if (NOT ANDROID)
+-    add_subdirectory(metavision_imx636_facility_casting_sample)
+-    add_subdirectory(metavision_riscv_logger)
+-endif (NOT ANDROID)
+diff --git a/sdk/modules/stream/cpp/samples/CMakeLists.txt b/sdk/modules/stream/cpp/samples/CMakeLists.txt
+index 242ac32..b49fea9 100644
+--- a/sdk/modules/stream/cpp/samples/CMakeLists.txt
++++ b/sdk/modules/stream/cpp/samples/CMakeLists.txt
+@@ -7,8 +7,6 @@
+ # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and limitations under the License.
+ 
+-add_subdirectory(metavision_camera_stream_slicer)
+-add_subdirectory(metavision_synced_camera_streams_slicer)
+ add_subdirectory(metavision_file_cutter)
+ add_subdirectory(metavision_file_to_csv)
+ add_subdirectory(metavision_file_to_dat)
+@@ -23,7 +21,6 @@ endif ()
+ if (NOT ANDROID)
+     # need support for std::filesystem in NDK
+     # AK comment here
+-    add_subdirectory(metavision_active_pixel_detection)
+     add_subdirectory_if_exists(metavision_evk3d_viewer)
+ endif (NOT ANDROID)
+ 
+-- 
+2.25.1
+

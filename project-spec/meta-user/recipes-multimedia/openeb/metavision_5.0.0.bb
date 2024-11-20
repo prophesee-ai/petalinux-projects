@@ -46,5 +46,7 @@ SRC_URI += "file://0006-V4L2-Introducing-V4L2Crop-facility.patch"
 SRC_URI += "file://0007-V4L2-add-v4l2-device-geometry-helpers.patch"
 SRC_URI += "file://0008-V4L2-ROI-interface-should-not-be-genx320-specific.patch"
 SRC_URI += "file://0009-V4L2-Avoid-breaking-imx636-relative-bias-behaviour.patch"
+SRC_URI += "file://0001-Disable-compilation-of-OpenEB-untested-apps.patch"
+
 
 SRCREV = "0391df5ab3bea6d0aa2595a73ccee66a1d9c1093"
