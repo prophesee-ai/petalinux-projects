@@ -1,0 +1,62 @@
+From e7b6aa5a1cabca84cfff02829c3ad610f46ad1e0 Mon Sep 17 00:00:00 2001
+From: Mathieu Maret <mmaret@prophesee.ai>
+Date: Fri, 26 Sep 2025 11:11:54 +0200
+Subject: [PATCH] v4l2 control: fix retrieving bias values
+
+Bias values, even when written from metavision, where never updated.
+So, for example, if you use an "input camera config" with option -j of
+the viewer, then start a record, the associated bias file will still
+contains the default bias.
+---
+ hal_psee_plugins/src/boards/v4l2/v4l2_controls.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/hal_psee_plugins/src/boards/v4l2/v4l2_controls.cpp b/hal_psee_plugins/src/boards/v4l2/v4l2_controls.cpp
+index 6014a292ad..10d762e4eb 100644
+--- a/hal_psee_plugins/src/boards/v4l2/v4l2_controls.cpp
++++ b/hal_psee_plugins/src/boards/v4l2/v4l2_controls.cpp
+@@ -22,11 +22,14 @@ int V4L2Controls::V4L2Control::push() {
+ 
+     return apply();
+ }
++
+ std::optional<int> V4L2Controls::V4L2Control::get_int(void) {
+     if (query_.flags & V4L2_CTRL_FLAG_WRITE_ONLY) {
+         return {};
+     }
+ 
++    refresh();
++
+     switch(query_.type) {
+         case V4L2_CTRL_TYPE_INTEGER:
+             return std::optional<int>(static_cast<int>(ctrl.value));
+@@ -40,6 +43,8 @@ std::optional<int64_t> V4L2Controls::V4L2Control::get_int64(void) {
+         return {};
+     }
+ 
++    refresh();
++
+     switch(query_.type) {
+         case V4L2_CTRL_TYPE_INTEGER:
+             return std::optional<int64_t>(static_cast<int64_t>(ctrl.value));
+@@ -55,6 +60,8 @@ std::optional<bool> V4L2Controls::V4L2Control::get_bool(void) {
+         return {};
+     }
+ 
++    refresh();
++
+     switch(query_.type) {
+         case V4L2_CTRL_TYPE_BOOLEAN:
+             return std::optional<bool>(static_cast<bool>(ctrl.value));
+@@ -68,6 +75,8 @@ std::optional<std::string> V4L2Controls::V4L2Control::get_str(void) {
+         return {};
+     }
+ 
++    refresh();
++
+     switch(query_.type) {
+         case V4L2_CTRL_TYPE_STRING:
+             return std::string(ctrl.string);
+-- 
+2.34.1
+
