@@ -29,3 +29,7 @@ do_install:append () {
     install -m 0700 ${WORKDIR}/load.sh ${D}/${bindir}/load-${PN}.sh
 }
 FILES:${PN} += "${bindir}/load-${PN}.sh"
+
+# Manually set version number
+PR = "r1"
+

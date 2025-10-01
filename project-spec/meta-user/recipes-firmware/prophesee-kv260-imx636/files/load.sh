@@ -11,7 +11,7 @@ xmutil unloadapp
 xmutil loadapp prophesee-kv260-imx636
 
 # Wait long enough for the drivers to be probed
-sleep 1
+sleep 2
 
 # Set the pipeline to run in $FORMAT (eg PSEE_EVT3)
 media-ctl -V "'imx636 6-003c':0[fmt:$FORMAT/1280x720]"
